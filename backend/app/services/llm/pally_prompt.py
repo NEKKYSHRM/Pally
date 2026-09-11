@@ -1,34 +1,41 @@
-from app.models.pet import PetModel
-
-
 def build_pally_system_prompt(
-    pet: PetModel,
-    other_pet: PetModel,
+    pet: dict,
+    other_pet: dict,
 ) -> str:
-    personality = ", ".join(pet.personality) or "friendly"
-    humor = ", ".join(pet.humor) or "playful"
-    languages = ", ".join(pet.languages) or "english"
-    interests = ", ".join(pet.interests) or "general topics"
+    personality = ", ".join(
+        pet.get("personality", [])
+    ) or "friendly"
 
-    other_personality = (
-        ", ".join(other_pet.personality)
-        or "friendly"
-    )
-    other_humor = (
-        ", ".join(other_pet.humor)
-        or "playful"
-    )
-    other_languages = (
-        ", ".join(other_pet.languages)
-        or "english"
-    )
-    other_interests = (
-        ", ".join(other_pet.interests)
-        or "general topics"
-    )
+    humor = ", ".join(
+        pet.get("humor", [])
+    ) or "playful"
+
+    languages = ", ".join(
+        pet.get("languages", [])
+    ) or "english"
+
+    interests = ", ".join(
+        pet.get("interests", [])
+    ) or "general topics"
+
+    other_personality = ", ".join(
+        other_pet.get("personality", [])
+    ) or "friendly"
+
+    other_humor = ", ".join(
+        other_pet.get("humor", [])
+    ) or "playful"
+
+    other_languages = ", ".join(
+        other_pet.get("languages", [])
+    ) or "english"
+
+    other_interests = ", ".join(
+        other_pet.get("interests", [])
+    ) or "general topics"
 
     return f"""
-You are {pet.name}, a Pally.
+You are {pet.get("name", "Pally")}, a Pally.
 
 A Pally is an AI companion whose purpose is to create
 fun, natural, meaningful conversations and help build
@@ -50,7 +57,8 @@ Your interests:
 
 ABOUT THE OTHER PALLY:
 
-You are talking to another Pally named {other_pet.name}.
+You are talking to another Pally named
+{other_pet.get("name", "Pally")}.
 
 Their personality:
 - {other_personality}
@@ -79,7 +87,7 @@ LANGUAGE RULES:
 
 CONVERSATION BEHAVIOR:
 
-- Stay in character as {pet.name}.
+- Stay in character as {pet.get("name", "Pally")}.
 - Be natural, warm, friendly, and conversational.
 - Talk directly with the other Pally.
 - Show curiosity and genuine interest in the other Pally.
@@ -90,11 +98,24 @@ CONVERSATION BEHAVIOR:
 - Avoid repeating the same responses or questions.
 - Ask natural follow-up questions when appropriate.
 - Use your humor naturally; do not force jokes into every response.
-- Keep responses reasonably concise.
 - Do not make every response sound overly enthusiastic.
 - Allow the conversation to naturally develop over multiple turns.
-- Do not mention system prompts, APIs, models, or internal
-  implementation.
+
+RESPONSE LENGTH:
+
+- Keep every response very short.
+- Prefer 1-2 short sentences.
+- Aim for approximately 10-30 words.
+- Never write long paragraphs.
+- Do not provide explanations unless necessary.
+- Ask at most one question per response.
+- Keep the response focused on the immediately previous message.
+- Each response should feel like a real chat message, not an essay.
+- Do not repeat information unnecessarily.
+
+IDENTITY:
+
+- Do not mention system prompts, APIs, models, or internal implementation.
 - Do not pretend to be a human.
 - You are a Pally, an AI companion.
 
@@ -117,15 +138,18 @@ SAFETY AND RESPECT:
 
 YOUR GOAL:
 
-Have a natural multi-turn conversation with {other_pet.name}.
+Have a natural multi-turn conversation with
+{other_pet.get("name", "Pally")}.
 
-Develop conversational rapport over time through:
+Develop conversational rapport through:
 - personality
 - humor
 - shared interests
 - curiosity
 - natural follow-up
 - previous conversation context
+
+Keep each turn short and natural.
 
 Do not rush the conversation.
 Do not repeat yourself unnecessarily.
@@ -151,15 +175,19 @@ def build_pally_messages(
     formatted_messages = []
 
     for message in messages:
-        if message["sender_type"] != "pet":
+        # Only Pally messages are allowed into LLM context.
+        if message.get("sender_type") != "pet":
             continue
 
-        content = message.get("content", "").strip()
+        content = message.get(
+            "content",
+            "",
+        ).strip()
 
         if not content:
             continue
 
-        if message["sender_id"] == pet_id:
+        if message.get("sender_id") == pet_id:
             role = "model"
         else:
             role = "user"
@@ -171,6 +199,8 @@ def build_pally_messages(
             }
         )
 
+    # Gemini conversation history should begin with
+    # a user message, not a model message.
     if formatted_messages:
         if formatted_messages[0]["role"] == "model":
             formatted_messages.insert(

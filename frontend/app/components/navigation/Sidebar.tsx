@@ -49,7 +49,6 @@ export default function Sidebar() {
     pathname === "/profile" ||
     pathname.startsWith("/profile/");
 
-
   // ===============================================================
   // Add Friend
   // ===============================================================
@@ -99,7 +98,6 @@ export default function Sidebar() {
       setIsSubmitting(false);
     }
   };
-
 
   // ===============================================================
   // Friend Requests
@@ -158,7 +156,9 @@ export default function Sidebar() {
         setRequestError(error.message);
       } else {
         setRequestError(
-          `Failed to ${action === "accepted" ? "accept" : "reject"} request.`
+          `Failed to ${
+            action === "accepted" ? "accept" : "reject"
+          } request.`
         );
       }
     } finally {
@@ -166,14 +166,13 @@ export default function Sidebar() {
     }
   };
 
-
   return (
     <>
       {/* =========================================================
           Desktop Sidebar
       ========================================================== */}
 
-      <aside className="relative z-20 hidden w-[250px] shrink-0 border-r border-[#eee9e4] bg-[#fffdfb]/90 px-5 py-7 backdrop-blur-sm lg:flex lg:flex-col xl:w-[290px] xl:px-7">
+      <aside className="sticky top-0 z-20 hidden h-screen w-[250px] shrink-0 overflow-hidden border-r border-[#eee9e4] bg-[#fffdfb]/90 px-5 py-7 backdrop-blur-sm lg:flex lg:flex-col xl:w-[290px] xl:px-7">
 
         {/* Logo */}
 

@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  FormEvent,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useSelector } from "react-redux";
@@ -13,6 +8,7 @@ import { useSelector } from "react-redux";
 import { getConnections } from "@/app/lib/api/connectionApi";
 import { getConversation } from "@/app/lib/api/conversationApi";
 import { getMessages } from "@/app/lib/api/messageApi";
+import { getPet } from "@/app/lib/api/petApi";
 
 import type { ConnectionFriend } from "@/app/types/connection";
 import type { Message } from "@/app/types/message";
@@ -25,23 +21,21 @@ export default function ChatPage() {
 
   const conversationId = params.id as string;
 
-  const currentUser = useSelector(
-    (state: RootState) => state.auth.user
-  );
+  const currentUser = useSelector((state: RootState) => state.auth.user);
 
-  const accessToken = useSelector(
-    (state: RootState) => state.auth.accessToken
-  );
+  const accessToken = useSelector((state: RootState) => state.auth.accessToken);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [messageText, setMessageText] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [pallySending, setPallySending] = useState(false);
   const [error, setError] = useState("");
   const [isConnected, setIsConnected] = useState(false);
 
-  const [friend, setFriend] =
-    useState<ConnectionFriend | null>(null);
+  const [friend, setFriend] = useState<ConnectionFriend | null>(null);
+
+  const [currentPetId, setCurrentPetId] = useState<string | null>(null);
 
   const websocketRef = useRef<WebSocket | null>(null);
 
@@ -50,9 +44,19 @@ export default function ChatPage() {
   // -----------------------------------------------------------------
 
   useEffect(() => {
-    if (!conversationId || !accessToken) {
+    if (!conversationId || !accessToken || !currentUser) {
       return;
     }
+
+    // ---------------------------------------------------------------
+    // Create stable non-null values.
+    //
+    // TypeScript now knows these are definitely strings and they can
+    // safely be used inside initializeChat().
+    // ---------------------------------------------------------------
+
+    const currentUserId = currentUser.id;
+    const token = accessToken;
 
     let isActive = true;
 
@@ -64,235 +68,213 @@ export default function ChatPage() {
       return;
     }
 
-    // ---------------------------------------------------------------
-    // Load conversation and friend information
-    // ---------------------------------------------------------------
-
-    async function loadChatDetails() {
-      try {
-        const [conversation, connections] =
-          await Promise.all([
-            getConversation(conversationId),
-            getConnections(),
-          ]);
-
-        if (!isActive || !currentUser) {
-          return;
-        }
-
-        const friendId =
-          conversation.participant_ids.find(
-            (participantId) =>
-              participantId !== currentUser.id
-          );
-
-        if (!friendId) {
-          return;
-        }
-
-        const connection = connections.find(
-          (item) => item.friend?.id === friendId
-        );
-
-        if (connection?.friend) {
-          setFriend(connection.friend);
-        }
-      } catch (err) {
-        console.error(
-          "Failed to load chat details:",
-          err
-        );
-      }
-    }
-
-    loadChatDetails();
-
-    // ---------------------------------------------------------------
-    // WebSocket URL
-    // ---------------------------------------------------------------
-
-    const websocketUrl = apiUrl
-      .replace(/^http:/, "ws:")
-      .replace(/^https:/, "wss:");
-
-    const websocket = new WebSocket(
-      `${websocketUrl}/ws/conversations/${conversationId}?token=${encodeURIComponent(
-        accessToken
-      )}`
-    );
-
-    websocketRef.current = websocket;
-
-    // ---------------------------------------------------------------
-    // WebSocket Open
-    // ---------------------------------------------------------------
-
-    websocket.onopen = () => {
-      if (
-        !isActive ||
-        websocketRef.current !== websocket
-      ) {
-        return;
-      }
-
-      console.log("WebSocket connected");
-
-      setIsConnected(true);
-    };
-
-    // ---------------------------------------------------------------
-    // WebSocket Message
-    // ---------------------------------------------------------------
-
-    websocket.onmessage = (event) => {
-      if (
-        !isActive ||
-        websocketRef.current !== websocket
-      ) {
-        return;
-      }
-
-      try {
-        const data = JSON.parse(event.data);
-
-        if (
-          data.type !== "message" ||
-          !data.message
-        ) {
-          return;
-        }
-
-        const incomingMessage =
-          data.message as Message;
-
-        setMessages((previousMessages) => {
-          const alreadyExists =
-            previousMessages.some(
-              (message) =>
-                message.id === incomingMessage.id
-            );
-
-          if (alreadyExists) {
-            return previousMessages;
-          }
-
-          return [
-            ...previousMessages,
-            incomingMessage,
-          ].sort(
-            (a, b) =>
-              new Date(a.created_at).getTime() -
-              new Date(b.created_at).getTime()
-          );
-        });
-      } catch (err) {
-        console.error(
-          "Failed to process WebSocket message:",
-          err
-        );
-      }
-    };
+    const baseApiUrl = apiUrl;
 
     // -----------------------------------------------------------------
-    // WebSocket Error
+    // Initialize chat
     // -----------------------------------------------------------------
 
-    websocket.onerror = (event) => {
-      if (
-        !isActive ||
-        websocketRef.current !== websocket
-      ) {
-        return;
-      }
-
-      console.error(
-        "WebSocket error:",
-        event
-      );
-
-      setIsConnected(false);
-    };
-
-    // -----------------------------------------------------------------
-    // WebSocket Close
-    // -----------------------------------------------------------------
-
-    websocket.onclose = (event) => {
-      console.log(
-        "WebSocket disconnected:",
-        {
-          code: event.code,
-          reason: event.reason,
-          wasClean: event.wasClean,
-        }
-      );
-
-      if (
-        !isActive ||
-        websocketRef.current !== websocket
-      ) {
-        return;
-      }
-
-      websocketRef.current = null;
-      setIsConnected(false);
-    };
-
-    // -----------------------------------------------------------------
-    // Load Historical Messages
-    // -----------------------------------------------------------------
-
-    async function loadMessages() {
+    async function initializeChat() {
       try {
         setLoading(true);
         setError("");
 
-        const data = await getMessages(
-          conversationId
-        );
+        // -------------------------------------------------------------
+        // Load everything required before opening WebSocket.
+        //
+        // Most importantly, get the current user's Pally first.
+        // -------------------------------------------------------------
+
+        const [conversation, connections, pet, messageHistory] =
+          await Promise.all([
+            getConversation(conversationId),
+            getConnections(),
+            getPet().catch(() => null),
+            getMessages(conversationId),
+          ]);
 
         if (!isActive) {
           return;
         }
 
-        setMessages((previousMessages) => {
-          const messageMap = new Map<
-            string,
-            Message
-          >();
+        // -------------------------------------------------------------
+        // Current user's Pally
+        // -------------------------------------------------------------
 
-          for (const message of data) {
-            messageMap.set(
-              message.id,
-              message
-            );
-          }
+        if (pet) {
+          setCurrentPetId(pet.id);
 
-          for (const message of previousMessages) {
-            messageMap.set(
-              message.id,
-              message
-            );
-          }
+          console.log("[CHAT] Current Pally:", {
+            id: pet.id,
+            name: pet.name,
+          });
+        } else {
+          console.log("[CHAT] Current user has no Pally");
+        }
 
-          return Array.from(
-            messageMap.values()
-          ).sort(
-            (a, b) =>
-              new Date(a.created_at).getTime() -
-              new Date(b.created_at).getTime()
-          );
-        });
-      } catch (err) {
-        console.error(
-          "Failed to load messages:",
-          err
+        // -------------------------------------------------------------
+        // Find friend
+        // -------------------------------------------------------------
+
+        const friendId = conversation.participant_ids.find(
+          (participantId) => participantId !== currentUserId,
         );
 
+        if (!friendId) {
+          setError("Unable to identify this conversation.");
+          return;
+        }
+
+        const connection = connections.find(
+          (item) => item.friend?.id === friendId,
+        );
+
+        if (connection?.friend) {
+          setFriend(connection.friend);
+        }
+
+        // -------------------------------------------------------------
+        // Load historical messages
+        // -------------------------------------------------------------
+
+        setMessages(
+          [...messageHistory].sort(
+            (a, b) =>
+              new Date(a.created_at).getTime() -
+              new Date(b.created_at).getTime(),
+          ),
+        );
+
+        // -------------------------------------------------------------
+        // Open WebSocket only AFTER current Pally is loaded.
+        // -------------------------------------------------------------
+
+        const websocketUrl = baseApiUrl
+          .replace(/^http:/, "ws:")
+          .replace(/^https:/, "wss:");
+
+        const websocket = new WebSocket(
+          `${websocketUrl}/ws/conversations/${conversationId}?token=${encodeURIComponent(
+            token,
+          )}`,
+        );
+
+        websocketRef.current = websocket;
+
+        // -------------------------------------------------------------
+        // WebSocket Open
+        // -------------------------------------------------------------
+
+        websocket.onopen = () => {
+          if (!isActive || websocketRef.current !== websocket) {
+            return;
+          }
+
+          console.log("[CHAT] WebSocket connected");
+
+          setIsConnected(true);
+          setError("");
+        };
+
+        // -------------------------------------------------------------
+        // WebSocket Message
+        // -------------------------------------------------------------
+
+        websocket.onmessage = (event) => {
+          if (!isActive || websocketRef.current !== websocket) {
+            return;
+          }
+
+          try {
+            const data = JSON.parse(event.data);
+
+            if (data.type !== "message" || !data.message) {
+              return;
+            }
+
+            const incomingMessage = data.message as Message;
+
+            console.log("[CHAT] Incoming message:", {
+              senderType: incomingMessage.sender_type,
+              senderId: incomingMessage.sender_id,
+              currentPetId: pet?.id ?? null,
+              currentUserId,
+            });
+
+            // ---------------------------------------------------------
+            // Pally response
+            // ---------------------------------------------------------
+
+            if (incomingMessage.sender_type === "pet") {
+              setPallySending(false);
+            }
+
+            // ---------------------------------------------------------
+            // Add message to UI
+            // ---------------------------------------------------------
+
+            setMessages((previousMessages) => {
+              const alreadyExists = previousMessages.some(
+                (message) => message.id === incomingMessage.id,
+              );
+
+              if (alreadyExists) {
+                return previousMessages;
+              }
+
+              return [...previousMessages, incomingMessage].sort(
+                (a, b) =>
+                  new Date(a.created_at).getTime() -
+                  new Date(b.created_at).getTime(),
+              );
+            });
+          } catch (err) {
+            console.error("Failed to process WebSocket message:", err);
+          }
+        };
+
+        // -------------------------------------------------------------
+        // WebSocket Error
+        // -------------------------------------------------------------
+
+        websocket.onerror = (event) => {
+          if (!isActive || websocketRef.current !== websocket) {
+            return;
+          }
+
+          console.error("[CHAT] WebSocket error:", event);
+
+          setIsConnected(false);
+          setPallySending(false);
+
+          setError("Real-time connection is not available.");
+        };
+
+        // -------------------------------------------------------------
+        // WebSocket Close
+        // -------------------------------------------------------------
+
+        websocket.onclose = (event) => {
+          console.log("[CHAT] WebSocket disconnected:", {
+            code: event.code,
+            reason: event.reason,
+            wasClean: event.wasClean,
+          });
+
+          if (!isActive || websocketRef.current !== websocket) {
+            return;
+          }
+
+          websocketRef.current = null;
+
+          setIsConnected(false);
+          setPallySending(false);
+        };
+      } catch (err) {
+        console.error("[CHAT] Failed to initialize chat:", err);
+
         if (isActive) {
-          setError(
-            "Unable to load this conversation."
-          );
+          setError("Unable to load this conversation.");
         }
       } finally {
         if (isActive) {
@@ -301,7 +283,7 @@ export default function ChatPage() {
       }
     }
 
-    loadMessages();
+    initializeChat();
 
     // -----------------------------------------------------------------
     // Cleanup
@@ -310,53 +292,38 @@ export default function ChatPage() {
     return () => {
       isActive = false;
 
-      console.log("Closing WebSocket");
+      console.log("[CHAT] Closing WebSocket");
 
-      if (
-        websocketRef.current === websocket
-      ) {
-        websocketRef.current = null;
-        setIsConnected(false);
+      const websocket = websocketRef.current;
+
+      websocketRef.current = null;
+
+      setIsConnected(false);
+      setPallySending(false);
+
+      if (websocket) {
+        websocket.close();
       }
-
-      websocket.close();
     };
-  }, [
-    conversationId,
-    accessToken,
-    currentUser,
-  ]);
+  }, [conversationId, accessToken, currentUser]);
 
   // -----------------------------------------------------------------
-  // Send Message
+  // Send User Message
   // -----------------------------------------------------------------
 
-  function handleSendMessage(
-    event: FormEvent<HTMLFormElement>
-  ) {
+  function handleSendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const content = messageText.trim();
 
-    if (
-      !content ||
-      sending ||
-      !isConnected
-    ) {
+    if (!content || sending || !isConnected) {
       return;
     }
 
-    const websocket =
-      websocketRef.current;
+    const websocket = websocketRef.current;
 
-    if (
-      !websocket ||
-      websocket.readyState !==
-        WebSocket.OPEN
-    ) {
-      setError(
-        "Real-time connection is not available."
-      );
+    if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+      setError("Real-time connection is not available.");
 
       return;
     }
@@ -368,21 +335,51 @@ export default function ChatPage() {
         JSON.stringify({
           type: "message",
           content,
-        })
+        }),
       );
 
       setMessageText("");
     } catch (err) {
-      console.error(
-        "Failed to send WebSocket message:",
-        err
-      );
+      console.error("Failed to send WebSocket message:", err);
 
-      setError(
-        "Unable to send your message."
-      );
+      setError("Unable to send your message.");
     } finally {
       setSending(false);
+    }
+  }
+
+  // -----------------------------------------------------------------
+  // Test Pally / Gemini
+  // -----------------------------------------------------------------
+
+  function handlePallyMessage() {
+    if (pallySending || !isConnected) {
+      return;
+    }
+
+    const websocket = websocketRef.current;
+
+    if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+      setError("Real-time connection is not available.");
+
+      return;
+    }
+
+    try {
+      setPallySending(true);
+      setError("");
+
+      websocket.send(
+        JSON.stringify({
+          type: "pally_message",
+        }),
+      );
+    } catch (err) {
+      console.error("Failed to request Pally response:", err);
+
+      setError("Unable to generate Pally response.");
+
+      setPallySending(false);
     }
   }
 
@@ -390,18 +387,17 @@ export default function ChatPage() {
   // Friend Display Helpers
   // -----------------------------------------------------------------
 
-  const friendDisplayName =
-    friend?.name ||
-    friend?.username ||
-    "Friend";
+  const friendDisplayName = friend?.name || friend?.username || "Friend";
 
-  const friendInitial =
-    getInitial(friendDisplayName);
+  const friendInitial = getInitial(friendDisplayName);
+
+  // -----------------------------------------------------------------
+  // Render
+  // -----------------------------------------------------------------
 
   return (
-    <main className="min-h-screen bg-[#fffdfb] text-[#202733] lg:h-screen">
-      <div className="relative flex min-h-screen w-full flex-col">
-
+    <main className="h-screen overflow-hidden bg-[#fffdfb] text-[#202733] lg:h-screen">
+      <div className="relative flex h-full min-h-0 w-full flex-col">
         {/* =========================================================
             Background decoration
         ========================================================== */}
@@ -420,23 +416,18 @@ export default function ChatPage() {
             Chat content
         ========================================================== */}
 
-        <div className="relative z-10 flex min-h-screen flex-col">
-
+        <div className="relative z-10 flex h-full min-h-0 flex-col">
           {/* =======================================================
               Header
           ======================================================== */}
 
           <header className="flex shrink-0 items-center justify-between border-b border-[#eee8e3] bg-white/85 px-5 py-4 backdrop-blur-md sm:px-8 lg:px-10">
-
             <div className="flex items-center gap-4">
-
               {/* Back */}
 
               <button
                 type="button"
-                onClick={() =>
-                  router.push("/chats")
-                }
+                onClick={() => router.push("/chats")}
                 className="flex h-10 w-10 items-center justify-center rounded-full text-[#697485] transition hover:bg-[#fff5ed] hover:text-[#202733]"
                 aria-label="Back to conversations"
               >
@@ -465,9 +456,7 @@ export default function ChatPage() {
                 </h1>
 
                 <p className="text-[13px] text-[#8a94a3]">
-                  {isConnected
-                    ? "Online"
-                    : "Connecting..."}
+                  {isConnected ? "Online" : "Connecting..."}
                 </p>
               </div>
             </div>
@@ -478,11 +467,8 @@ export default function ChatPage() {
               href="/profile"
               className="flex h-10 w-10 items-center justify-center rounded-full bg-[#b5cc9d] text-[15px] font-medium text-white"
             >
-              {getInitial(
-                currentUser?.name
-              )}
+              {getInitial(currentUser?.name)}
             </Link>
-
           </header>
 
           {/* =======================================================
@@ -490,10 +476,9 @@ export default function ChatPage() {
           ======================================================== */}
 
           <div className="flex min-h-0 flex-1 flex-col">
-
-            <div className="flex-1 overflow-y-auto px-5 py-6 sm:px-8 lg:px-10">
-
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8 lg:px-10">
               <div className="mx-auto flex w-full max-w-[850px] flex-col gap-3">
+                {/* Loading */}
 
                 {loading && (
                   <div className="flex flex-1 items-center justify-center py-20">
@@ -503,71 +488,81 @@ export default function ChatPage() {
                   </div>
                 )}
 
+                {/* Error */}
+
                 {!loading && error && (
                   <div className="flex flex-1 items-center justify-center py-20">
                     <div className="text-center">
-                      <div className="text-[45px]">
-                        🐾
-                      </div>
+                      <div className="text-[45px]">🐾</div>
 
-                      <p className="mt-3 text-[16px] text-[#8993a2]">
-                        {error}
+                      <p className="mt-3 text-[16px] text-[#8993a2]">{error}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty conversation */}
+
+                {!loading && !error && messages.length === 0 && (
+                  <div className="flex flex-1 items-center justify-center py-24">
+                    <div className="text-center">
+                      <div className="text-[55px]">🐾</div>
+
+                      <h2 className="mt-4 text-[23px] font-semibold text-[#202733]">
+                        Start a conversation
+                      </h2>
+
+                      <p className="mt-2 text-[15px] text-[#8993a2]">
+                        Say hello and start chatting.
                       </p>
                     </div>
                   </div>
                 )}
 
-                {!loading &&
-                  !error &&
-                  messages.length === 0 && (
-                    <div className="flex flex-1 items-center justify-center py-24">
-                      <div className="text-center">
-                        <div className="text-[55px]">
-                          🐾
-                        </div>
-
-                        <h2 className="mt-4 text-[23px] font-semibold text-[#202733]">
-                          Start a conversation
-                        </h2>
-
-                        <p className="mt-2 text-[15px] text-[#8993a2]">
-                          Say hello and start chatting.
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                {/* Messages */}
 
                 {!loading &&
                   !error &&
                   messages.map((message) => {
-                    const isMine =
-                      message.sender_type ===
-                        "user" &&
-                      message.sender_id ===
-                        currentUser?.id;
+                    const isPet = message.sender_type === "pet";
 
-                    const isPet =
-                      message.sender_type ===
-                      "pet";
+                    // -------------------------------------------------
+                    // Normal user message
+                    // -------------------------------------------------
+
+                    const isMyUserMessage =
+                      message.sender_type === "user" &&
+                      message.sender_id === currentUser?.id;
+
+                    // -------------------------------------------------
+                    // Current user's Pally message
+                    // -------------------------------------------------
+
+                    const isMyPetMessage =
+                      message.sender_type === "pet" &&
+                      message.sender_id === currentPetId;
+
+                    // -------------------------------------------------
+                    // Anything generated by my Pally should appear
+                    // on my side.
+                    // -------------------------------------------------
+
+                    const isMine = isMyUserMessage || isMyPetMessage;
 
                     return (
                       <div
                         key={message.id}
                         className={`flex ${
-                          isMine
-                            ? "justify-end"
-                            : "justify-start"
+                          isMine ? "justify-end" : "justify-start"
                         }`}
                       >
                         <div
                           className={`flex max-w-[75%] items-end gap-2 ${
-                            isMine
-                              ? "flex-row-reverse"
-                              : "flex-row"
+                            isMine ? "flex-row-reverse" : "flex-row"
                           }`}
                         >
-
-                          {/* Pet avatar */}
+                          {/* -------------------------------------------------
+                                Pally avatar
+                            ------------------------------------------------- */}
 
                           {isPet && (
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#dbe9ce] text-[16px]">
@@ -575,7 +570,9 @@ export default function ChatPage() {
                             </div>
                           )}
 
-                          {/* Message */}
+                          {/* -------------------------------------------------
+                                Message bubble
+                            ------------------------------------------------- */}
 
                           <div
                             className={`rounded-2xl px-4 py-3 text-[15px] leading-[1.45] ${
@@ -586,12 +583,10 @@ export default function ChatPage() {
                           >
                             {message.content}
                           </div>
-
                         </div>
                       </div>
                     );
                   })}
-
               </div>
             </div>
 
@@ -600,51 +595,50 @@ export default function ChatPage() {
             ====================================================== */}
 
             <div className="shrink-0 border-t border-[#eee8e3] bg-white/85 px-5 py-4 backdrop-blur-md sm:px-8 lg:px-10">
+              <div className="mx-auto flex w-full max-w-[850px] flex-col gap-3">
+                {/* Temporary Pally test */}
 
-              <form
-                onSubmit={
-                  handleSendMessage
-                }
-                className="mx-auto flex w-full max-w-[850px] items-center gap-3"
-              >
+                <div className="flex items-center justify-between">
+                  <p className="text-[12px] text-[#9aa2ad]">Test Pally</p>
 
-                <input
-                  type="text"
-                  value={messageText}
-                  onChange={(event) =>
-                    setMessageText(
-                      event.target.value
-                    )
-                  }
-                  placeholder={
-                    isConnected
-                      ? "Write a message..."
-                      : "Connecting..."
-                  }
-                  disabled={
-                    sending ||
-                    !isConnected
-                  }
-                  className="min-w-0 flex-1 rounded-full border border-[#e3e0dd] bg-[#fffdfb] px-5 py-3.5 text-[15px] text-[#202733] outline-none transition placeholder:text-[#a2aab5] focus:border-[#b5cc9d] focus:ring-2 focus:ring-[#dbe9ce]"
-                />
+                  <button
+                    type="button"
+                    onClick={handlePallyMessage}
+                    disabled={pallySending || !isConnected}
+                    className="rounded-full bg-[#dbe9ce] px-4 py-2 text-[13px] font-medium text-[#5d7350] transition hover:bg-[#cfe5b7] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {pallySending ? "Pally is thinking..." : "Ask Pally 🐾"}
+                  </button>
+                </div>
 
-                <button
-                  type="submit"
-                  disabled={
-                    sending ||
-                    !messageText.trim() ||
-                    !isConnected
-                  }
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#75ad55] text-white shadow-[0_5px_15px_rgba(117,173,85,0.20)] transition hover:bg-[#68a14b] disabled:cursor-not-allowed disabled:opacity-50"
-                  aria-label="Send message"
+                {/* Normal chat input */}
+
+                <form
+                  onSubmit={handleSendMessage}
+                  className="flex w-full items-center gap-3"
                 >
-                  <SendIcon />
-                </button>
+                  <input
+                    type="text"
+                    value={messageText}
+                    onChange={(event) => setMessageText(event.target.value)}
+                    placeholder={
+                      isConnected ? "Write a message..." : "Connecting..."
+                    }
+                    disabled={sending || !isConnected}
+                    className="min-w-0 flex-1 rounded-full border border-[#e3e0dd] bg-[#fffdfb] px-5 py-3.5 text-[15px] text-[#202733] outline-none transition placeholder:text-[#a2aab5] focus:border-[#b5cc9d] focus:ring-2 focus:ring-[#dbe9ce]"
+                  />
 
-              </form>
-
+                  <button
+                    type="submit"
+                    disabled={sending || !messageText.trim() || !isConnected}
+                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#75ad55] text-white shadow-[0_5px_15px_rgba(117,173,85,0.20)] transition hover:bg-[#68a14b] disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label="Send message"
+                  >
+                    <SendIcon />
+                  </button>
+                </form>
+              </div>
             </div>
-
           </div>
         </div>
       </div>
@@ -652,24 +646,17 @@ export default function ChatPage() {
   );
 }
 
-
 // ===============================================================
 // Helpers
 // ===============================================================
 
-function getInitial(
-  value?: string | null
-): string {
+function getInitial(value?: string | null): string {
   if (!value) {
     return "?";
   }
 
-  return value
-    .trim()
-    .charAt(0)
-    .toUpperCase();
+  return value.trim().charAt(0).toUpperCase();
 }
-
 
 // ===============================================================
 // Arrow left icon
@@ -693,7 +680,6 @@ function ArrowLeftIcon() {
   );
 }
 
-
 // ===============================================================
 // Send icon
 // ===============================================================
@@ -710,7 +696,7 @@ function SendIcon() {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <path d="m22 2-7 20-4-9-9-4Z" />
+      <path d="m22 2-7 20-9-4-9-4Z" />
       <path d="M22 2 11 13" />
     </svg>
   );

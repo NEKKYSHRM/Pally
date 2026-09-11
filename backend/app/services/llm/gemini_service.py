@@ -1,9 +1,12 @@
+import asyncio
+
 from google import genai
 
 from app.core.config import settings
 
 
 class GeminiService:
+
     def __init__(self):
         self.client = genai.Client(
             api_key=settings.GEMINI_API_KEY,
@@ -68,21 +71,65 @@ class GeminiService:
             )
 
         # -----------------------------------------------------------
-        # Generate response
+        # Generate response with retry handling
         # -----------------------------------------------------------
 
-        response = await self.client.aio.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=contents,
-            config={
-                "system_instruction": system_prompt,
-            },
-        )
+        max_attempts = 3
 
-        if not response.text:
-            return ""
+        for attempt in range(1, max_attempts + 1):
 
-        return response.text.strip()
+            try:
+
+                print(
+                    "[GEMINI] Generate attempt "
+                    f"{attempt}/{max_attempts}"
+                )
+
+                response = (
+                    await self.client.aio.models.generate_content(
+                        model="gemini-3.6-flash",
+                        contents=contents,
+                        config={
+                            "system_instruction": system_prompt,
+                        },
+                    )
+                )
+
+                if not response.text:
+                    return ""
+
+                return response.text.strip()
+
+            except Exception as exc:
+
+                print(
+                    "[GEMINI] Generation failed: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+
+                # ---------------------------------------------------
+                # If this was the final attempt, let the exception
+                # propagate to PallyChatService.
+                # ---------------------------------------------------
+
+                if attempt == max_attempts:
+                    raise
+
+                # ---------------------------------------------------
+                # Wait before retrying.
+                #
+                # 2 seconds before attempt 2
+                # 4 seconds before attempt 3
+                # ---------------------------------------------------
+
+                retry_delay = attempt * 2
+
+                print(
+                    "[GEMINI] Retrying in "
+                    f"{retry_delay}s..."
+                )
+
+                await asyncio.sleep(retry_delay)
 
 
 gemini_service = GeminiService()
