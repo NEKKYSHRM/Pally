@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # -------------------------------------------------------------------
@@ -9,7 +9,37 @@ ALLOWED_LANGUAGES = {
     "hindi",
     "english",
     "hinglish",
-}   
+}
+
+
+# -------------------------------------------------------------------
+# Shared validation
+# -------------------------------------------------------------------
+
+def validate_languages(
+    languages: list[str] | None,
+) -> list[str] | None:
+    if languages is None:
+        return None
+
+    normalized_languages = [
+        language.strip().lower()
+        for language in languages
+    ]
+
+    invalid_languages = [
+        language
+        for language in normalized_languages
+        if language not in ALLOWED_LANGUAGES
+    ]
+
+    if invalid_languages:
+        raise ValueError(
+            f"Unsupported language(s): {', '.join(invalid_languages)}. "
+            f"Allowed languages: {', '.join(sorted(ALLOWED_LANGUAGES))}"
+        )
+
+    return normalized_languages
 
 
 # -------------------------------------------------------------------
@@ -42,6 +72,14 @@ class PetCreate(BaseModel):
         default_factory=list,
         max_length=20,
     )
+
+    @field_validator("languages")
+    @classmethod
+    def validate_language_values(
+        cls,
+        languages: list[str],
+    ) -> list[str]:
+        return validate_languages(languages) or []
 
 
 # -------------------------------------------------------------------
@@ -80,6 +118,14 @@ class PetUpdate(BaseModel):
 
     activity_enabled: bool | None = None
 
+    @field_validator("languages")
+    @classmethod
+    def validate_language_values(
+        cls,
+        languages: list[str] | None,
+    ) -> list[str] | None:
+        return validate_languages(languages)
+
 
 # -------------------------------------------------------------------
 # Pet Response
@@ -87,23 +133,13 @@ class PetUpdate(BaseModel):
 
 class PetResponse(BaseModel):
     id: str
-
     user_id: str
-
     name: str
-
     personality: list[str]
-
     humor: list[str]
-
     languages: list[str]
-
     interests: list[str]
-
     is_active: bool
-
     activity_enabled: bool
-
     created_at: str
-
     updated_at: str

@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     GOOGLE_REDIRECT_URI: str
 
     FRONTEND_URL: str
+    GEMINI_API_KEY: str
 
     model_config = SettingsConfigDict(
         env_file=".env",

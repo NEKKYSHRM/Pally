@@ -16,78 +16,89 @@ interface AuthInitializerProps {
   children: React.ReactNode;
 }
 
+let authInitializationPromise: Promise<void> | null = null;
+
+async function initializeAuth(
+  dispatch: AppDispatch
+): Promise<void> {
+  try {
+    const refreshResponse = await fetch(
+      `${API_URL}/auth/refresh`,
+      {
+        method: "POST",
+        credentials: "include",
+      }
+    );
+
+    if (!refreshResponse.ok) {
+      dispatch(setLoading(false));
+      return;
+    }
+
+    const refreshData = await refreshResponse.json();
+
+    const accessToken = refreshData.access_token;
+
+    if (!accessToken) {
+      dispatch(setLoading(false));
+      return;
+    }
+
+    const meResponse = await fetch(
+      `${API_URL}/auth/me`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        credentials: "include",
+      }
+    );
+
+    if (!meResponse.ok) {
+      dispatch(
+        setError("Failed to retrieve user information")
+      );
+      dispatch(setLoading(false));
+      return;
+    }
+
+    const user = await meResponse.json();
+
+    dispatch(
+      setCredentials({
+        user,
+        accessToken,
+      })
+    );
+  } catch (error) {
+    console.error(
+      "Authentication initialization failed:",
+      error
+    );
+
+    dispatch(
+      setError("Unable to restore authentication session")
+    );
+
+    dispatch(setLoading(false));
+  }
+}
+
 export default function AuthInitializer({
   children,
 }: AuthInitializerProps) {
   const dispatch = useDispatch<AppDispatch>();
 
   useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        // Get a new access token using the HttpOnly refresh-token cookie
-        const refreshResponse = await fetch(
-          `${API_URL}/auth/refresh`,
-          {
-            method: "POST",
-            credentials: "include",
-          }
-        );
+    if (!authInitializationPromise) {
+      authInitializationPromise =
+        initializeAuth(dispatch);
+    }
 
-        if (!refreshResponse.ok) {
-          dispatch(setLoading(false));
-          return;
-        }
-
-        const refreshData = await refreshResponse.json();
-        const accessToken = refreshData.access_token;
-
-        if (!accessToken) {
-          dispatch(setLoading(false));
-          return;
-        }
-
-        // Get the authenticated user's information
-        const meResponse = await fetch(
-          `${API_URL}/auth/me`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-            },
-            credentials: "include",
-          }
-        );
-
-        if (!meResponse.ok) {
-          dispatch(setError("Failed to retrieve user information"));
-          dispatch(setLoading(false));
-          return;
-        }
-
-        const user = await meResponse.json();
-
-        // Store the authenticated user and access token in Redux
-        dispatch(
-          setCredentials({
-            user,
-            accessToken,
-          })
-        );
-      } catch (error) {
-        console.error(
-          "Authentication initialization failed:",
-          error
-        );
-
-        dispatch(
-          setError("Unable to restore authentication session")
-        );
-
-        dispatch(setLoading(false));
-      }
-    };
-
-    initializeAuth();
+    authInitializationPromise.catch(() => {
+      // Error is already handled inside initializeAuth.
+    });
   }, [dispatch]);
 
   return <>{children}</>;

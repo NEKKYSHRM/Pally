@@ -1,13 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.endpoints.auth import get_current_user
+
+from app.crud.connection import get_connection_between_users
+
 from app.crud.conversation import (
     create_conversation,
     delete_conversation,
+    get_conversation_between_users,
     get_conversation_for_user,
     get_user_conversations,
     update_conversation,
 )
+
+from app.crud.user import get_user_by_id
+
 from app.schemas.conversation import (
     ConversationCreate,
     ConversationResponse,
@@ -81,6 +88,78 @@ async def create_user_conversation(
 
     conversation = await create_conversation(
         participant_ids=participant_ids
+    )
+
+    return conversation_to_response(conversation)
+
+
+# -------------------------------------------------------------------
+# Get or Create Conversation With Friend
+# -------------------------------------------------------------------
+
+@router.post(
+    "/with/{friend_id}",
+    response_model=ConversationResponse,
+)
+async def get_or_create_conversation_with_friend(
+    friend_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Get an existing conversation with a friend.
+
+    If no conversation exists, create one.
+
+    The users must have an accepted connection.
+    """
+
+    # Cannot create a conversation with yourself.
+    if friend_id == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot create a conversation with yourself",
+        )
+
+    # Verify that the friend exists.
+    friend = await get_user_by_id(friend_id)
+
+    if not friend:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Friend user not found",
+        )
+
+    # Verify that the users have a connection.
+    connection = await get_connection_between_users(
+        user_a_id=user_id,
+        user_b_id=friend_id,
+    )
+
+    if not connection:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not connected with this user",
+        )
+
+    # Only accepted connections can start conversations.
+    if connection["status"] != "accepted":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only start conversations with accepted friends",
+        )
+
+    # Check whether a conversation already exists.
+    conversation = await get_conversation_between_users(
+        user_a_id=user_id,
+        user_b_id=friend_id,
+    )
+
+    if conversation:
+        return conversation_to_response(conversation)
+
+    # No conversation exists, so create one.
+    conversation = await create_conversation(
+        participant_ids=[user_id, friend_id]
     )
 
     return conversation_to_response(conversation)

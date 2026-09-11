@@ -25,7 +25,6 @@ async def create_message(
     """
     Create and store a message in a conversation.
     """
-
     now = datetime.now(timezone.utc)
 
     message = MessageModel(
@@ -67,7 +66,6 @@ async def get_conversation_messages(
     """
     Get all messages in chronological order.
     """
-
     cursor = messages_collection.find(
         {
             "conversation_id": conversation_id,
@@ -91,16 +89,55 @@ async def get_recent_messages(
     limit: int = 20,
 ) -> list[dict]:
     """
-    Get the most recent messages for AI context.
+    Get the most recent messages in a conversation.
 
     Messages are returned in chronological order.
     """
-
     cursor = (
         messages_collection
         .find(
             {
                 "conversation_id": conversation_id,
+            }
+        )
+        .sort(
+            "created_at",
+            -1,
+        )
+        .limit(limit)
+    )
+
+    messages = await cursor.to_list(
+        length=limit
+    )
+
+    messages.reverse()
+
+    return messages
+
+
+# -------------------------------------------------------------------
+# Get Recent Pally Messages
+# -------------------------------------------------------------------
+
+async def get_recent_pally_messages(
+    conversation_id: str,
+    limit: int = 15,
+) -> list[dict]:
+    """
+    Get the most recent Pally-generated messages
+    for a conversation.
+
+    Only messages where sender_type is "pet" are returned.
+
+    Messages are returned in chronological order.
+    """
+    cursor = (
+        messages_collection
+        .find(
+            {
+                "conversation_id": conversation_id,
+                "sender_type": "pet",
             }
         )
         .sort(

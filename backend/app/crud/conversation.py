@@ -68,6 +68,33 @@ async def get_user_conversations(
         length=None
     )
 
+# -------------------------------------------------------------------
+# Get Conversation Between Users
+# -------------------------------------------------------------------
+
+async def get_conversation_between_users(
+    user_a_id: str,
+    user_b_id: str,
+) -> dict | None:
+    """
+    Get an existing conversation between two users.
+
+    The conversation must contain both users as participants.
+    """
+
+    return await conversations_collection.find_one(
+        {
+            "$and": [
+                {
+                    "participant_ids": user_a_id,
+                },
+                {
+                    "participant_ids": user_b_id,
+                },
+            ]
+        }
+    )
+
 
 # -------------------------------------------------------------------
 # Create Conversation
