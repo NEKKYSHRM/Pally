@@ -69,6 +69,9 @@ async def create_user(
     username: str | None = None,
     name: str | None = None,
     picture: str | None = None,
+    date_of_birth: str | None = None,
+    gender: str | None = None,
+    profession: str | None = None,
 ) -> dict:
     now = datetime.now(timezone.utc)
 
@@ -78,6 +81,9 @@ async def create_user(
         username=username,
         name=name,
         picture=picture,
+        date_of_birth=date_of_birth,
+        gender=gender,
+        profession=profession,
         created_at=now,
         updated_at=now,
     )
@@ -100,6 +106,9 @@ async def update_user(
     username: str | None = None,
     name: str | None = None,
     picture: str | None = None,
+    date_of_birth: str | None = None,
+    gender: str | None = None,
+    profession: str | None = None,
 ) -> dict | None:
     update_data = {
         "updated_at": datetime.now(timezone.utc)
@@ -113,6 +122,15 @@ async def update_user(
 
     if picture is not None:
         update_data["picture"] = picture
+
+    if date_of_birth is not None:
+        update_data["date_of_birth"] = date_of_birth
+
+    if gender is not None:
+        update_data["gender"] = gender
+
+    if profession is not None:
+        update_data["profession"] = profession
 
     return await users_collection.find_one_and_update(
         {"_id": ObjectId(user_id)},
