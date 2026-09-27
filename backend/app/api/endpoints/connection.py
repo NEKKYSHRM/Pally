@@ -11,6 +11,7 @@ from app.crud.connection import (
     get_pending_sent_connections,
     get_user_connections,
     update_connection_status,
+    update_relationship_preferences,
 )
 
 from app.crud.user import (
@@ -22,6 +23,7 @@ from app.schemas.connection import (
     ConnectionCreate,
     ConnectionResponse,
     ConnectionStatusUpdate,
+    RelationshipPreferenceUpdate,
 )
 
 
@@ -45,8 +47,16 @@ async def connection_to_response(
     # Determine who the other user is.
     if requester_id == current_user_id:
         friend_id = receiver_id
+        preferences = connection.get(
+            "requester_preferences",
+            {},
+        )
     else:
         friend_id = requester_id
+        preferences = connection.get(
+            "receiver_preferences",
+            {},
+        )
 
     friend = await get_user_by_id(friend_id)
 
@@ -61,6 +71,7 @@ async def connection_to_response(
         "requester_id": requester_id,
         "receiver_id": receiver_id,
         "status": connection["status"],
+        "relationship_preferences": preferences,
         "created_at": connection["created_at"],
         "updated_at": connection["updated_at"],
         "friend": {
@@ -87,7 +98,6 @@ async def send_connection_request(
 ):
     username = connection_data.username.strip().lower()
 
-    # Find user by username
     receiver = await get_user_by_username(username)
 
     if not receiver:
@@ -96,7 +106,6 @@ async def send_connection_request(
             detail="User not found",
         )
 
-    # Only active users can receive connection requests
     if not receiver.get("is_active", True):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -105,14 +114,12 @@ async def send_connection_request(
 
     receiver_id = str(receiver["_id"])
 
-    # Cannot send a request to yourself
     if receiver_id == user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot send a connection request to yourself",
         )
 
-    # Check whether a connection already exists
     existing_connection = await get_connection_between_users(
         user_a_id=user_id,
         user_b_id=receiver_id,
@@ -250,7 +257,6 @@ async def get_connection(
             detail="Connection not found",
         )
 
-    # Only participants can view the connection
     if (
         connection["requester_id"] != user_id
         and connection["receiver_id"] != user_id
@@ -262,6 +268,56 @@ async def get_connection(
 
     return await connection_to_response(
         connection,
+        current_user_id=user_id,
+    )
+
+
+# -------------------------------------------------------------------
+# Update relationship preferences
+# -------------------------------------------------------------------
+
+@router.patch(
+    "/{connection_id}/preferences",
+    response_model=ConnectionResponse,
+)
+async def update_preferences(
+    connection_id: str,
+    preferences_data: RelationshipPreferenceUpdate,
+    user_id: str = Depends(get_current_user),
+):
+    connection = await get_connection_by_id(
+        connection_id=connection_id,
+    )
+
+    if not connection:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Connection not found",
+        )
+
+    if user_id not in (
+        connection["requester_id"],
+        connection["receiver_id"],
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not part of this connection",
+        )
+
+    updated_connection = await update_relationship_preferences(
+        connection_id=connection_id,
+        user_id=user_id,
+        preferences=preferences_data.model_dump(),
+    )
+
+    if not updated_connection:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Connection not found",
+        )
+
+    return await connection_to_response(
+        updated_connection,
         current_user_id=user_id,
     )
 
@@ -294,14 +350,12 @@ async def update_connection(
     current_status = connection["status"]
     new_status = status_data.status
 
-    # Only participants can modify the connection
     if user_id not in (requester_id, receiver_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not part of this connection",
         )
 
-    # Only pending requests can be accepted or rejected
     if new_status in ("accepted", "rejected"):
         if current_status != "pending":
             raise HTTPException(
@@ -309,14 +363,12 @@ async def update_connection(
                 detail="Only pending connection requests can be accepted or rejected",
             )
 
-        # Only the receiver can accept or reject
         if user_id != receiver_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only the receiver can accept or reject this request",
             )
 
-    # Either participant can block the connection
     if new_status == "blocked":
         if current_status == "blocked":
             raise HTTPException(
@@ -362,7 +414,6 @@ async def remove_connection(
             detail="Connection not found",
         )
 
-    # Only participants can delete the connection
     if user_id not in (
         connection["requester_id"],
         connection["receiver_id"],

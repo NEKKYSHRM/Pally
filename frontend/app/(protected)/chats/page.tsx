@@ -13,16 +13,13 @@ import type { RootState } from "@/app/store/store";
 export default function ChatsPage() {
   const router = useRouter();
 
-  const currentUser = useSelector(
-    (state: RootState) => state.auth.user
-  );
+  const currentUser = useSelector((state: RootState) => state.auth.user);
 
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [openingFriendId, setOpeningFriendId] = useState<string | null>(
-    null
-  );
+  const [openingFriendId, setOpeningFriendId] = useState<string | null>(null);
+  const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     async function loadConnections() {
@@ -45,7 +42,7 @@ export default function ChatsPage() {
   }, []);
 
   const friends = connections.filter(
-    (connection) => connection.status === "accepted"
+    (connection) => connection.status === "accepted",
   );
 
   async function handleFriendClick(friendId: string) {
@@ -65,7 +62,6 @@ export default function ChatsPage() {
   return (
     <main className="min-h-screen bg-[#fffdfb] text-[#202733] lg:h-screen lg:overflow-hidden">
       <div className="relative flex min-h-screen w-full lg:h-screen lg:min-h-0">
-
         {/* =========================================================
             Background decoration
         ========================================================== */}
@@ -94,7 +90,6 @@ export default function ChatsPage() {
         ========================================================== */}
 
         <div className="relative z-10 flex min-w-0 flex-1 flex-col">
-
           {/* =======================================================
               Mobile / tablet header
           ======================================================== */}
@@ -105,9 +100,7 @@ export default function ChatsPage() {
                 Pally
               </span>
 
-              <span className="ml-1 -mt-1 text-[27px]">
-                🐾
-              </span>
+              <span className="ml-1 -mt-1 text-[27px]">🐾</span>
             </Link>
 
             <Link
@@ -144,7 +137,6 @@ export default function ChatsPage() {
           ======================================================== */}
 
           <section className="flex flex-1 flex-col px-5 pb-24 sm:px-8 lg:px-10 lg:pb-8 xl:px-14">
-
             {/* Page heading */}
 
             <div className="flex items-start justify-between">
@@ -163,9 +155,7 @@ export default function ChatsPage() {
               <div className="hidden w-[310px] items-center gap-3 rounded-full border border-[#e3e0dd] bg-white/80 px-5 py-3.5 text-[#9aa3b1] shadow-[0_2px_10px_rgba(32,39,51,0.03)] xl:flex">
                 <SearchIcon />
 
-                <span className="text-[15px]">
-                  Search conversations...
-                </span>
+                <span className="text-[15px]">Search conversations...</span>
               </div>
             </div>
 
@@ -188,13 +178,9 @@ export default function ChatsPage() {
             {!loading && error && (
               <div className="flex flex-1 items-center justify-center">
                 <div className="text-center">
-                  <div className="text-[45px]">
-                    🐾
-                  </div>
+                  <div className="text-[45px]">🐾</div>
 
-                  <p className="mt-3 text-[17px] text-[#7c8798]">
-                    {error}
-                  </p>
+                  <p className="mt-3 text-[17px] text-[#7c8798]">{error}</p>
                 </div>
               </div>
             )}
@@ -206,7 +192,6 @@ export default function ChatsPage() {
             {!loading && !error && friends.length > 0 && (
               <div className="mt-8 flex-1 overflow-y-auto pb-4">
                 <div className="w-full max-w-[900px]">
-
                   {friends.map((connection) => {
                     const friend = connection.friend;
                     const isOpening = openingFriendId === friend.id;
@@ -221,17 +206,22 @@ export default function ChatsPage() {
                       >
                         {/* Friend avatar */}
 
-                        {friend.picture ? (
+                        {friend.picture && !failedImageIds.has(friend.id) ? (
                           <img
                             src={friend.picture}
                             alt={friend.name || friend.username}
+                            onError={() => {
+                              setFailedImageIds((previous) => {
+                                const next = new Set(previous);
+                                next.add(friend.id);
+                                return next;
+                              });
+                            }}
                             className="h-14 w-14 shrink-0 rounded-full object-cover"
                           />
                         ) : (
                           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#dbe9ce] text-[23px]">
-                            {getInitial(
-                              friend.name || friend.username
-                            )}
+                            {getInitial(friend.name || friend.username)}
                           </div>
                         )}
 
@@ -255,7 +245,6 @@ export default function ChatsPage() {
                       </button>
                     );
                   })}
-
                 </div>
               </div>
             )}
@@ -267,11 +256,9 @@ export default function ChatsPage() {
             {!loading && !error && friends.length === 0 && (
               <div className="flex flex-1 items-center justify-center">
                 <div className="flex w-full max-w-[620px] flex-col items-center text-center">
-
                   {/* Puppy */}
 
                   <div className="relative mt-5 h-[190px] w-[330px] sm:h-[220px] sm:w-[390px]">
-
                     {/* Shadow */}
 
                     <div className="absolute bottom-2 left-1/2 h-5 w-[260px] -translate-x-1/2 rounded-full bg-[#eadfd2] opacity-40 blur-md" />
@@ -280,20 +267,17 @@ export default function ChatsPage() {
 
                     <div className="absolute left-1/2 top-0 -translate-x-1/2">
                       <div className="relative h-[65px] w-[55px]">
-
                         <div className="absolute left-1/2 top-[27px] h-[42px] w-[5px] -translate-x-1/2 rotate-[10deg] rounded-full bg-[#7da64d]" />
 
                         <div className="absolute left-[8px] top-[2px] h-[30px] w-[19px] -rotate-[28deg] rounded-[100%_0_100%_0] bg-[#8dbd57]" />
 
                         <div className="absolute right-[4px] top-[19px] h-[25px] w-[21px] rotate-[35deg] rounded-[0_100%_0_100%] bg-[#8dbd57]" />
-
                       </div>
                     </div>
 
                     {/* Puppy */}
 
                     <div className="absolute bottom-[20px] left-1/2 h-[145px] w-[230px] -translate-x-1/2 rounded-[46%_46%_22%_22%] bg-gradient-to-b from-[#fffaf0] to-[#f5ead9] shadow-[0_15px_30px_rgba(180,155,130,0.10)] sm:h-[165px] sm:w-[260px]">
-
                       {/* Ears */}
 
                       <div className="absolute -left-[34px] top-[20px] h-[95px] w-[58px] rotate-[27deg] rounded-[55%_45%_45%_55%] bg-[#825136] sm:-left-[40px] sm:h-[110px] sm:w-[65px]" />
@@ -325,13 +309,11 @@ export default function ChatsPage() {
                       {/* Smile */}
 
                       <div className="absolute left-1/2 top-[86px] h-[30px] w-[54px] -translate-x-1/2">
-
                         <div className="absolute left-1/2 top-0 h-[17px] w-[27px] -translate-x-1/2 rounded-b-full border-b-[5px] border-[#292a2c]" />
 
                         <div className="absolute left-[5px] top-[4px] h-[19px] w-[19px] rounded-bl-full border-b-[5px] border-l-[5px] border-[#292a2c]" />
 
                         <div className="absolute right-[5px] top-[4px] h-[19px] w-[19px] rounded-br-full border-b-[5px] border-r-[5px] border-[#292a2c]" />
-
                       </div>
 
                       {/* Paws */}
@@ -339,19 +321,15 @@ export default function ChatsPage() {
                       <div className="absolute -bottom-[8px] left-[18px] h-[43px] w-[58px] rounded-full bg-[#fffaf0]" />
 
                       <div className="absolute -bottom-[8px] right-[18px] h-[43px] w-[58px] rounded-full bg-[#fffaf0]" />
-
                     </div>
 
                     {/* Heart */}
 
                     <div className="absolute right-[5%] top-[20px] flex h-[72px] w-[85px] items-center justify-center rounded-[50%] bg-[#fff7ef] sm:right-[7%]">
-                      <span className="text-[28px] text-[#f58483]">
-                        ♥
-                      </span>
+                      <span className="text-[28px] text-[#f58483]">♥</span>
 
                       <div className="absolute bottom-[0] left-[7px] h-0 w-0 rotate-[12deg] border-l-[15px] border-t-[10px] border-l-transparent border-t-[#fff7ef]" />
                     </div>
-
                   </div>
 
                   {/* Empty state text */}
@@ -373,10 +351,8 @@ export default function ChatsPage() {
                     <span className="text-[28px] font-light leading-none">
                       +
                     </span>
-
                     Add a friend
                   </Link>
-
                 </div>
               </div>
             )}
@@ -390,18 +366,14 @@ export default function ChatsPage() {
                 New conversations.”
               </p>
 
-              <div className="mt-2 text-[18px] opacity-70">
-                🐾
-              </div>
+              <div className="mt-2 text-[18px] opacity-70">🐾</div>
             </div>
-
           </section>
         </div>
       </div>
     </main>
   );
 }
-
 
 /* ===============================================================
    Helpers
@@ -414,7 +386,6 @@ function getInitial(value?: string | null): string {
 
   return value.trim().charAt(0).toUpperCase();
 }
-
 
 /* ===============================================================
    Search icon
@@ -436,7 +407,6 @@ function SearchIcon() {
     </svg>
   );
 }
-
 
 /* ===============================================================
    Chevron down icon

@@ -9,8 +9,8 @@ import { getConnections } from "@/app/lib/api/connectionApi";
 import { getConversation } from "@/app/lib/api/conversationApi";
 import { getMessages } from "@/app/lib/api/messageApi";
 import { getPet } from "@/app/lib/api/petApi";
-
-import type { ConnectionFriend } from "@/app/types/connection";
+import RelationshipSettings from "@/app/components/chat/RelationshipSettings";
+import type { Connection, ConnectionFriend } from "@/app/types/connection";
 import type { Message } from "@/app/types/message";
 
 import type { RootState } from "@/app/store/store";
@@ -32,8 +32,11 @@ export default function ChatPage() {
   const [pallySending, setPallySending] = useState(false);
   const [error, setError] = useState("");
   const [isConnected, setIsConnected] = useState(false);
-
   const [friend, setFriend] = useState<ConnectionFriend | null>(null);
+  const [connection, setConnection] = useState<Connection | null>(null);
+  const [showRelationshipSettings, setShowRelationshipSettings] =
+    useState(false);
+  const [imageError, setImageError] = useState(false);
 
   const [currentPetId, setCurrentPetId] = useState<string | null>(null);
 
@@ -129,8 +132,13 @@ export default function ChatPage() {
           (item) => item.friend?.id === friendId,
         );
 
-        if (connection?.friend) {
-          setFriend(connection.friend);
+        if (connection) {
+          setConnection(connection);
+
+          if (connection.friend) {
+            setFriend(connection.friend);
+            setImageError(false);
+          }
         }
 
         // -------------------------------------------------------------
@@ -188,6 +196,48 @@ export default function ChatPage() {
           try {
             const data = JSON.parse(event.data);
 
+            // -------------------------------------------------------------
+            // Pally autonomous conversation started
+            // -------------------------------------------------------------
+
+            if (data.type === "pally_started") {
+              console.log("[CHAT] Pally conversation started");
+
+              setPallySending(true);
+              setError("");
+
+              return;
+            }
+
+            // -------------------------------------------------------------
+            // Pally autonomous conversation finished
+            // -------------------------------------------------------------
+
+            if (data.type === "pally_finished") {
+              console.log("[CHAT] Pally conversation finished");
+
+              setPallySending(false);
+
+              return;
+            }
+
+            // -------------------------------------------------------------
+            // Pally generation error
+            // -------------------------------------------------------------
+
+            if (data.type === "pally_error") {
+              console.error("[CHAT] Pally error:", data.message);
+
+              setPallySending(false);
+              setError(data.message || "Unable to generate Pally response.");
+
+              return;
+            }
+
+            // -------------------------------------------------------------
+            // Normal message event
+            // -------------------------------------------------------------
+
             if (data.type !== "message" || !data.message) {
               return;
             }
@@ -201,17 +251,29 @@ export default function ChatPage() {
               currentUserId,
             });
 
-            // ---------------------------------------------------------
-            // Pally response
-            // ---------------------------------------------------------
+            // -------------------------------------------------------------
+            // IMPORTANT:
+            //
+            // Do not stop Pally sending state when a Pally message arrives.
+            // The backend controls the complete lifecycle:
+            //
+            // pally_started
+            //      ↓
+            // message
+            //      ↓
+            // message
+            //      ↓
+            // message
+            //      ↓
+            // pally_finished
+            //
+            // Therefore setPallySending(false) is handled only by
+            // pally_finished or pally_error.
+            // -------------------------------------------------------------
 
-            if (incomingMessage.sender_type === "pet") {
-              setPallySending(false);
-            }
-
-            // ---------------------------------------------------------
+            // -------------------------------------------------------------
             // Add message to UI
-            // ---------------------------------------------------------
+            // -------------------------------------------------------------
 
             setMessages((previousMessages) => {
               const alreadyExists = previousMessages.some(
@@ -436,10 +498,11 @@ export default function ChatPage() {
 
               {/* Friend avatar */}
 
-              {friend?.picture ? (
+              {friend?.picture && !imageError ? (
                 <img
                   src={friend.picture}
                   alt={friendDisplayName}
+                  onError={() => setImageError(true)}
                   className="h-11 w-11 rounded-full object-cover"
                 />
               ) : (
@@ -463,12 +526,31 @@ export default function ChatPage() {
 
             {/* Profile */}
 
-            <Link
-              href="/profile"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-[#b5cc9d] text-[15px] font-medium text-white"
-            >
-              {getInitial(currentUser?.name)}
-            </Link>
+            {/* Header actions */}
+
+            <div className="flex items-center gap-2">
+              {/* Relationship settings */}
+
+              <button
+                type="button"
+                onClick={() => setShowRelationshipSettings(true)}
+                disabled={!connection}
+                className="flex h-10 w-10 items-center justify-center rounded-full text-[#697485] transition hover:bg-[#fff5ed] hover:text-[#202733] disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Relationship settings"
+                title="Pally relationship settings"
+              >
+                <SettingsIcon />
+              </button>
+
+              {/* Profile */}
+
+              <Link
+                href="/profile"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-[#b5cc9d] text-[15px] font-medium text-white"
+              >
+                {getInitial(currentUser?.name)}
+              </Link>
+            </div>
           </header>
 
           {/* =======================================================
@@ -641,6 +723,27 @@ export default function ChatPage() {
             </div>
           </div>
         </div>
+        {/* =======================================================
+            Relationship Settings
+        ======================================================== */}
+
+        {showRelationshipSettings && connection && (
+          <RelationshipSettings
+            connectionId={connection.id}
+            preferences={connection.relationship_preferences}
+            onSaved={(updatedPreferences) => {
+              setConnection((previous) =>
+                previous
+                  ? {
+                      ...previous,
+                      relationship_preferences: updatedPreferences,
+                    }
+                  : previous,
+              );
+            }}
+            onClose={() => setShowRelationshipSettings(false)}
+          />
+        )}
       </div>
     </main>
   );
@@ -676,6 +779,28 @@ function ArrowLeftIcon() {
     >
       <path d="M19 12H5" />
       <path d="m12 19-7-7 7-7" />
+    </svg>
+  );
+}
+
+// ===============================================================
+// Settings icon
+// ===============================================================
+
+function SettingsIcon() {
+  return (
+    <svg
+      width="19"
+      height="19"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.9 1.9-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.04 1.56V20h-2.7v-.09a1.7 1.7 0 0 0-1.04-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-1.9-1.9.06-.06A1.7 1.7 0 0 0 7.6 15a1.7 1.7 0 0 0-1.56-1.04H5.9v-2.7h.14A1.7 1.7 0 0 0 7.6 10a1.7 1.7 0 0 0-.34-1.88L7.2 8.06l1.9-1.9.06.06a1.7 1.7 0 0 0 1.88.34 1.7 1.7 0 0 0 1.04-1.56V4.9h2.7v.09a1.7 1.7 0 0 0 1.04 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 1.9 1.9-.06.06A1.7 1.7 0 0 0 19.4 10a1.7 1.7 0 0 0 1.56 1.04h.14v2.7h-.14A1.7 1.7 0 0 0 19.4 15Z" />
     </svg>
   );
 }

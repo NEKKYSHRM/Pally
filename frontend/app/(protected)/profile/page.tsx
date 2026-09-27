@@ -9,6 +9,7 @@ import type { RootState } from "@/app/store/store";
 
 type ProfileData = {
   id?: string;
+  username: string;
   name: string;
   email: string;
   picture: string | null;
@@ -19,10 +20,13 @@ type ProfileData = {
 
 export default function ProfilePage() {
   const currentUser = useSelector((state: RootState) => state.auth.user);
-
   const accessToken = useSelector((state: RootState) => state.auth.accessToken);
 
+  const [usernameCopied, setUsernameCopied] = useState(false);
+  const [imageError, setImageError] = useState(false);
+
   const [profile, setProfile] = useState<ProfileData>({
+    username: currentUser?.username || "",
     name: currentUser?.name || "",
     email: currentUser?.email || "",
     picture: currentUser?.picture ?? null,
@@ -41,6 +45,8 @@ export default function ProfilePage() {
       setLoading(false);
       return;
     }
+
+    setImageError(false);
 
     setProfile((previous) => ({
       ...previous,
@@ -63,6 +69,7 @@ export default function ProfilePage() {
 
         setProfile({
           id: data.id,
+          username: data.username || "",
           name: data.name || "",
           email: data.email || "",
           picture: data.picture,
@@ -109,6 +116,7 @@ export default function ProfilePage() {
 
       setProfile((previous) => ({
         ...previous,
+        username: updatedProfile.username ?? previous.username,
         name: updatedProfile.name ?? previous.name,
         email: updatedProfile.email ?? previous.email,
         picture: updatedProfile.picture ?? previous.picture,
@@ -159,10 +167,6 @@ export default function ProfilePage() {
 
           <header className="flex shrink-0 items-center justify-between border-b border-[#eee8e3] bg-white/85 px-5 py-5 backdrop-blur-md sm:px-8 lg:px-10">
             <div>
-              <p className="text-[13px] font-medium text-[#8a94a3]">
-                Your space
-              </p>
-
               <h1 className="mt-0.5 text-[25px] font-semibold tracking-[-0.5px] text-[#202733]">
                 Profile
               </h1>
@@ -197,10 +201,11 @@ export default function ProfilePage() {
                 <div className="relative flex flex-col items-start gap-6 sm:flex-row sm:items-center">
                   {/* Avatar */}
 
-                  {profile.picture ? (
+                  {profile.picture && !imageError ? (
                     <img
                       src={profile.picture}
                       alt={displayName}
+                      onError={() => setImageError(true)}
                       className="h-24 w-24 shrink-0 rounded-full object-cover ring-4 ring-[#fff0e3]"
                     />
                   ) : (
@@ -212,22 +217,46 @@ export default function ProfilePage() {
                   {/* User information */}
 
                   <div className="min-w-0">
-                    <p className="text-[13px] font-medium text-[#8a94a3]">
-                      Pally member
-                    </p>
 
                     <h2 className="mt-1 text-[28px] font-semibold tracking-[-0.7px] text-[#202733]">
                       {displayName}
                     </h2>
 
-                    {email && (
-                      <p className="mt-1 text-[15px] text-[#8a94a3]">{email}</p>
+                    {profile.username && (
+                      <div className="mt-1 flex items-center gap-2">
+                        <p className="text-[15px] font-medium text-[#75ad55]">
+                          @{profile.username}
+                        </p>
+
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(
+                                `@${profile.username}`,
+                              );
+
+                              setUsernameCopied(true);
+
+                              setTimeout(() => {
+                                setUsernameCopied(false);
+                              }, 1500);
+                            } catch (error) {
+                              console.error("Failed to copy username:", error);
+                            }
+                          }}
+                          className="rounded-full bg-[#eef7e9] px-2.5 py-1 text-[11px] font-medium text-[#5d7b4e] transition hover:bg-[#dbe9ce]"
+                        >
+                          {usernameCopied ? "Copied!" : "Copy"}
+                        </button>
+                      </div>
                     )}
 
-                    <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#fff0e3] px-3.5 py-2 text-[12px] font-medium text-[#8a654b]">
-                      <span>🐾</span>
-                      <span>Making friendships brighter</span>
-                    </div>
+                    {email && (
+                      <p className="mt-1 text-[14px] text-[#8a94a3]">{email}</p>
+                    )}
+
+                    
                   </div>
                 </div>
               </section>

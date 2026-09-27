@@ -4,6 +4,31 @@ import { FormEvent, useEffect, useState } from "react";
 import { createPet, getPet, updatePet } from "@/app/lib/api/petApi";
 import type { Pet, PetCreate, PetUpdate } from "@/app/types/pet";
 
+const MOODS = [
+  "Chill",
+  "Playful",
+  "Energetic",
+  "Happy",
+  "Excited",
+  "Romantic",
+  "Flirty",
+  "Lonely",
+  "Sad",
+  "Heartbroken",
+  "Just broke up",
+  "Stressed",
+  "Tired",
+  "Bored",
+  "Curious",
+  "Motivated",
+  "Nostalgic",
+  "Adventurous",
+  "Chaotic",
+  "Peaceful",
+  "Feeling social",
+  "Need a distraction",
+];
+
 const PERSONALITIES = [
   "Friendly",
   "Playful",
@@ -34,13 +59,39 @@ const INTERESTS = [
   "Music",
   "Gaming",
   "Movies",
+  "TV Shows",
+  "Anime",
   "Sports",
+  "Football",
+  "Cricket",
   "Travel",
   "Food",
+  "Cooking",
   "Memes",
   "Books",
   "Technology",
+  "Coding",
+  "AI",
   "Art",
+  "Photography",
+  "Fashion",
+  "Fitness",
+  "Gym",
+  "Cars",
+  "Space",
+  "Science",
+  "History",
+  "Business",
+  "Finance",
+  "Startups",
+  "Nature",
+  "Pets",
+  "Dance",
+  "K-Pop",
+  "Movies & Series",
+  "Social Media",
+  "Stand-up Comedy",
+  "Podcasts",
 ];
 
 export default function page() {
@@ -49,13 +100,13 @@ export default function page() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-
   const [name, setName] = useState("");
   const [personality, setPersonality] = useState<string[]>([]);
   const [humor, setHumor] = useState<string[]>([]);
   const [languages, setLanguages] = useState<string[]>(["english"]);
   const [interests, setInterests] = useState<string[]>([]);
   const [activityEnabled, setActivityEnabled] = useState(true);
+  const [mood, setMood] = useState("chill");
 
   useEffect(() => {
     loadPet();
@@ -75,6 +126,7 @@ export default function page() {
       setLanguages(currentPet.languages);
       setInterests(currentPet.interests);
       setActivityEnabled(currentPet.activity_enabled);
+      setMood(currentPet.mood);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unable to load your Pally.";
@@ -107,9 +159,7 @@ export default function page() {
     if (languages.includes(language)) {
       if (languages.length === 1) return;
 
-      setLanguages(
-        languages.filter((item) => item !== language),
-      );
+      setLanguages(languages.filter((item) => item !== language));
 
       return;
     }
@@ -144,6 +194,7 @@ export default function page() {
           humor,
           languages,
           interests,
+          mood,
           activity_enabled: activityEnabled,
         };
 
@@ -156,6 +207,7 @@ export default function page() {
           humor,
           languages,
           interests,
+          mood,
         };
 
         const createdPet = await createPet(data);
@@ -204,10 +256,6 @@ export default function page() {
         <header className="mb-7">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-[#7B7068] shadow-sm ring-1 ring-[#F0E5DC]">
-                <span className="h-2 w-2 rounded-full bg-[#91B98A]" />
-                My Pally
-              </div>
 
               <h1 className="text-3xl font-bold tracking-tight text-[#3F3935] sm:text-4xl">
                 {pet ? `Meet ${pet.name}` : "Create your Pally"}
@@ -224,16 +272,12 @@ export default function page() {
               <div className="flex items-center gap-2 self-start rounded-full bg-white px-3 py-2 shadow-sm ring-1 ring-[#F0E5DC] sm:self-auto">
                 <span
                   className={`h-2.5 w-2.5 rounded-full ${
-                    activityEnabled
-                      ? "bg-[#91B98A]"
-                      : "bg-[#C7BEB8]"
+                    activityEnabled ? "bg-[#91B98A]" : "bg-[#C7BEB8]"
                   }`}
                 />
 
                 <span className="text-xs font-semibold text-[#6E655F]">
-                  {activityEnabled
-                    ? "Pally activity on"
-                    : "Activity paused"}
+                  {activityEnabled ? "Pally activity on" : "Activity paused"}
                 </span>
               </div>
             )}
@@ -254,133 +298,43 @@ export default function page() {
         )}
 
         <form onSubmit={handleSubmit}>
-          <div className="grid gap-6 lg:grid-cols-[0.82fr_1.18fr]">
-            {/* ------------------------------------------------------ */}
-            {/* Pally Preview */}
-            {/* ------------------------------------------------------ */}
-            <section className="relative overflow-hidden rounded-[32px] bg-white p-6 shadow-[0_12px_40px_rgba(91,73,59,0.07)] ring-1 ring-[#F0E5DC] sm:p-8">
-              <div className="absolute -right-12 -top-12 h-36 w-36 rounded-full bg-[#F8D8C6]" />
-              <div className="absolute -bottom-12 -left-10 h-32 w-32 rounded-full bg-[#DCEBD9]" />
-
-              <div className="relative flex h-full flex-col">
-                <div className="mb-6">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#A8998D]">
-                    Your little companion
-                  </p>
-                </div>
-
-                {/* Avatar */}
-                <div className="flex flex-1 flex-col items-center justify-center py-6">
-                  <div className="relative">
-                    <div className="flex h-36 w-36 items-center justify-center rounded-[42%] bg-[#F7D4C0] shadow-[0_18px_35px_rgba(194,132,99,0.18)] sm:h-44 sm:w-44">
-                      <div className="relative h-28 w-28 sm:h-32 sm:w-32">
-                        {/* ears */}
-                        <div className="absolute -left-3 top-1 h-12 w-10 rotate-[-28deg] rounded-[55%] bg-[#E9B99F]" />
-                        <div className="absolute -right-3 top-1 h-12 w-10 rotate-[28deg] rounded-[55%] bg-[#E9B99F]" />
-
-                        {/* face */}
-                        <div className="absolute inset-0 rounded-[45%] bg-[#FBE6D8]">
-                          <div className="absolute left-7 top-11 h-2.5 w-2.5 rounded-full bg-[#514942]" />
-                          <div className="absolute right-7 top-11 h-2.5 w-2.5 rounded-full bg-[#514942]" />
-
-                          <div className="absolute left-1/2 top-[58%] h-3 w-5 -translate-x-1/2 rounded-full bg-[#7E665C]" />
-
-                          <div className="absolute left-1/2 top-[68%] h-2 w-8 -translate-x-1/2 rounded-b-full border-b-2 border-[#7E665C]" />
-
-                          <div className="absolute left-3 top-14 h-3 w-5 rounded-full bg-[#F3BDAA] opacity-70" />
-                          <div className="absolute right-3 top-14 h-3 w-5 rounded-full bg-[#F3BDAA] opacity-70" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="absolute -bottom-2 -right-3 flex h-11 w-11 items-center justify-center rounded-full bg-white text-xl shadow-md ring-1 ring-[#F0E5DC]">
-                      ✨
-                    </div>
-                  </div>
-
-                  <div className="mt-7 text-center">
-                    <h2 className="text-2xl font-bold text-[#403934]">
-                      {name.trim() || "Your Pally"}
-                    </h2>
-
-                    <p className="mt-1 text-sm text-[#8A7F77]">
-                      {personality.length > 0
-                        ? personality.slice(0, 2).join(" · ")
-                        : "Still discovering their personality"}
-                    </p>
-                  </div>
-
-                  {/* Personality summary */}
-                  <div className="mt-6 flex max-w-sm flex-wrap justify-center gap-2">
-                    {personality.slice(0, 4).map((item) => (
-                      <span
-                        key={item}
-                        className="rounded-full bg-[#F8EEE7] px-3 py-1.5 text-xs font-semibold text-[#786A61]"
-                      >
-                        {item}
-                      </span>
-                    ))}
-
-                    {personality.length === 0 && (
-                      <span className="rounded-full bg-[#F8EEE7] px-3 py-1.5 text-xs font-semibold text-[#9A8D84]">
-                        Pick a personality
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Activity */}
-                <div className="mt-5 rounded-2xl bg-[#FFF9F3] p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-bold text-[#4B433E]">
-                        Let your Pally be active
-                      </p>
-
-                      <p className="mt-1 text-xs leading-5 text-[#8A7F77]">
-                        Allow your Pally to participate and react when activity
-                        features are enabled.
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setActivityEnabled(!activityEnabled)
-                      }
-                      aria-pressed={activityEnabled}
-                      className={`relative mt-0.5 h-7 w-12 shrink-0 rounded-full transition ${
-                        activityEnabled
-                          ? "bg-[#86A87F]"
-                          : "bg-[#D5CCC5]"
-                      }`}
-                    >
-                      <span
-                        className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
-                          activityEnabled
-                            ? "translate-x-6"
-                            : "translate-x-1"
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </section>
-
+          <div>
             {/* ------------------------------------------------------ */}
             {/* Configuration */}
             {/* ------------------------------------------------------ */}
             <section className="rounded-[32px] bg-white p-6 shadow-[0_12px_40px_rgba(91,73,59,0.07)] ring-1 ring-[#F0E5DC] sm:p-8">
-              <div className="mb-7">
-                <h2 className="text-xl font-bold text-[#403934]">
-                  Tell us about your Pally
-                </h2>
+              <div className="mb-7 flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-[#403934]">
+                    Tell us about your Pally
+                  </h2>
 
-                <p className="mt-1 text-sm text-[#8A7F77]">
-                  These choices shape how your Pally feels and communicates.
-                </p>
-              </div>
+                  <p className="mt-1 text-sm text-[#8A7F77]">
+                    These choices shape how your Pally feels and communicates.
+                  </p>
+                </div>
+
+                {pet && (
+                  <button
+                    type="button"
+                    onClick={() => setActivityEnabled((value) => !value)}
+                    aria-pressed={activityEnabled}
+                    className={`flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-xs font-bold transition ${
+                      activityEnabled
+                        ? "bg-[#E5F1E2] text-[#587453] ring-1 ring-[#BFD5BA]"
+                        : "bg-[#F3EEEA] text-[#81766E] ring-1 ring-[#E2D9D2]"
+                    }`}
+                  >
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        activityEnabled ? "bg-[#86A87F]" : "bg-[#B8AEA7]"
+                      }`}
+                    />
+
+                    {activityEnabled ? "Activity On" : "Activity Off"}
+                  </button>
+                )}
+              </div>  
 
               <div className="space-y-7">
                 {/* Name */}
@@ -409,6 +363,40 @@ export default function page() {
                   </div>
                 </div>
 
+                <div>
+                  <div className="mb-3">
+                    <h3 className="text-sm font-bold text-[#514942]">
+                      Current mood
+                    </h3>
+                    <p className="mt-1 text-xs text-[#9A8F87]">
+                      How is you're feeling right now?
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {MOODS.map((item) => {
+                      const value = item.toLowerCase();
+                      const selected = mood === value;
+
+                      return (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => setMood(value)}
+                          className={`rounded-full px-3.5 py-2 text-xs font-bold transition ${
+                            selected
+                              ? "bg-[#F8D7C5] text-[#805D4B] ring-1 ring-[#EABBA3]"
+                              : "bg-[#FFF9F3] text-[#81766E] ring-1 ring-[#F0E5DC] hover:bg-[#F9F0E8]"
+                          }`}
+                        >
+                          {selected && <span className="mr-1.5">✓</span>}
+                          {item}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {/* Personality */}
                 <ChoiceSection
                   title="Personality"
@@ -431,11 +419,7 @@ export default function page() {
                   values={HUMOR_STYLES}
                   selected={humor}
                   onToggle={(value) =>
-                    toggleValue(
-                      value.toLowerCase(),
-                      humor,
-                      setHumor,
-                    )
+                    toggleValue(value.toLowerCase(), humor, setHumor)
                   }
                 />
 
@@ -452,26 +436,20 @@ export default function page() {
 
                   <div className="flex flex-wrap gap-2">
                     {LANGUAGES.map((language) => {
-                      const selected = languages.includes(
-                        language.value,
-                      );
+                      const selected = languages.includes(language.value);
 
                       return (
                         <button
                           key={language.value}
                           type="button"
-                          onClick={() =>
-                            toggleLanguage(language.value)
-                          }
+                          onClick={() => toggleLanguage(language.value)}
                           className={`rounded-full px-4 py-2 text-xs font-bold transition ${
                             selected
                               ? "bg-[#DCEBD9] text-[#587453] ring-1 ring-[#BFD5BA]"
                               : "bg-[#FFF9F3] text-[#81766E] ring-1 ring-[#F0E5DC] hover:bg-[#F9F0E8]"
                           }`}
                         >
-                          {selected && (
-                            <span className="mr-1.5">✓</span>
-                          )}
+                          {selected && <span className="mr-1.5">✓</span>}
                           {language.label}
                         </button>
                       );
@@ -486,11 +464,7 @@ export default function page() {
                   values={INTERESTS}
                   selected={interests}
                   onToggle={(value) =>
-                    toggleValue(
-                      value.toLowerCase(),
-                      interests,
-                      setInterests,
-                    )
+                    toggleValue(value.toLowerCase(), interests, setInterests)
                   }
                 />
 
@@ -554,13 +528,9 @@ function ChoiceSection({
   return (
     <div>
       <div className="mb-3">
-        <h3 className="text-sm font-bold text-[#514942]">
-          {title}
-        </h3>
+        <h3 className="text-sm font-bold text-[#514942]">{title}</h3>
 
-        <p className="mt-1 text-xs text-[#9A8F87]">
-          {description}
-        </p>
+        <p className="mt-1 text-xs text-[#9A8F87]">{description}</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -579,9 +549,7 @@ function ChoiceSection({
                   : "bg-[#FFF9F3] text-[#81766E] ring-1 ring-[#F0E5DC] hover:bg-[#F9F0E8]"
               }`}
             >
-              {isSelected && (
-                <span className="mr-1.5">✓</span>
-              )}
+              {isSelected && <span className="mr-1.5">✓</span>}
               {value}
             </button>
           );

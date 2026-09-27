@@ -6,6 +6,7 @@ export interface Pet {
   humor: string[];
   languages: string[];
   interests: string[];
+  mood: string;
   is_active: boolean;
   activity_enabled: boolean;
   created_at: string;
@@ -18,6 +19,7 @@ export interface PetCreate {
   humor: string[];
   languages: string[];
   interests: string[];
+  mood: string;
 }
 
 export interface PetUpdate {
@@ -26,6 +28,7 @@ export interface PetUpdate {
   humor?: string[];
   languages?: string[];
   interests?: string[];
+  mood?: string;
   is_active?: boolean;
   activity_enabled?: boolean;
 }

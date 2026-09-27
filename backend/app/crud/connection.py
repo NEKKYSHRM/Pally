@@ -117,6 +117,46 @@ async def update_connection_status(
     )
 
 
+async def update_relationship_preferences(
+    connection_id: str,
+    user_id: str,
+    preferences: dict,
+) -> dict | None:
+    """
+    Update the relationship preferences belonging to the
+    current user.
+
+    The user can only update their own side of the connection.
+    """
+
+    connection = await connections_collection.find_one(
+        {"_id": ObjectId(connection_id)}
+    )
+
+    if not connection:
+        return None
+
+    if connection["requester_id"] == user_id:
+        preferences_field = "requester_preferences"
+
+    elif connection["receiver_id"] == user_id:
+        preferences_field = "receiver_preferences"
+
+    else:
+        return None
+
+    update_data = {
+        preferences_field: preferences,
+        "updated_at": datetime.now(timezone.utc),
+    }
+
+    return await connections_collection.find_one_and_update(
+        {"_id": ObjectId(connection_id)},
+        {"$set": update_data},
+        return_document=True,
+    )
+
+
 async def delete_connection(
     connection_id: str,
 ) -> bool:

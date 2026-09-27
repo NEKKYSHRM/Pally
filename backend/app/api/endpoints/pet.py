@@ -16,9 +16,22 @@ router = APIRouter(
 )
 
 
-# -------------------------------------------------------------------
-# Create Pet
-# -------------------------------------------------------------------
+def pet_response(pet: dict) -> dict:
+    return {
+        "id": str(pet["_id"]),
+        "user_id": pet["user_id"],
+        "name": pet["name"],
+        "personality": pet["personality"],
+        "humor": pet["humor"],
+        "languages": pet["languages"],
+        "interests": pet["interests"],
+        "mood": pet["mood"],
+        "is_active": pet["is_active"],
+        "activity_enabled": pet["activity_enabled"],
+        "created_at": pet["created_at"],
+        "updated_at": pet["updated_at"],
+    }
+
 
 @router.post(
     "",
@@ -28,16 +41,6 @@ async def create_user_pet(
     pet_data: PetCreate,
     user_id: str = Depends(get_current_user),
 ):
-    """
-    Create a Pally for the authenticated user.
-
-    Each user can have only one Pally.
-    """
-
-    # ---------------------------------------------------------------
-    # Check whether user already has a Pally
-    # ---------------------------------------------------------------
-
     existing_pet = await get_pet_by_user_id(user_id)
 
     if existing_pet:
@@ -46,10 +49,6 @@ async def create_user_pet(
             detail="User already has a Pally",
         )
 
-    # ---------------------------------------------------------------
-    # Create Pally
-    # ---------------------------------------------------------------
-
     pet = await create_pet(
         user_id=user_id,
         name=pet_data.name,
@@ -57,35 +56,16 @@ async def create_user_pet(
         humor=pet_data.humor,
         languages=pet_data.languages,
         interests=pet_data.interests,
+        mood=pet_data.mood,
     )
 
-    return {
-        "id": str(pet["_id"]),
-        "user_id": pet["user_id"],
-        "name": pet["name"],
-        "personality": pet["personality"],
-        "humor": pet["humor"],
-        "languages": pet["languages"],
-        "interests": pet["interests"],
-        "is_active": pet["is_active"],
-        "activity_enabled": pet["activity_enabled"],
-        "created_at": pet["created_at"],
-        "updated_at": pet["updated_at"],
-    }
+    return pet_response(pet)
 
-
-# -------------------------------------------------------------------
-# Get Pet
-# -------------------------------------------------------------------
 
 @router.get("")
 async def get_user_pet(
     user_id: str = Depends(get_current_user),
 ):
-    """
-    Get the authenticated user's Pally.
-    """
-
     pet = await get_pet_by_user_id(user_id)
 
     if not pet:
@@ -94,34 +74,14 @@ async def get_user_pet(
             detail="Pally not found",
         )
 
-    return {
-        "id": str(pet["_id"]),
-        "user_id": pet["user_id"],
-        "name": pet["name"],
-        "personality": pet["personality"],
-        "humor": pet["humor"],
-        "languages": pet["languages"],
-        "interests": pet["interests"],
-        "is_active": pet["is_active"],
-        "activity_enabled": pet["activity_enabled"],
-        "created_at": pet["created_at"],
-        "updated_at": pet["updated_at"],
-    }
+    return pet_response(pet)
 
-
-# -------------------------------------------------------------------
-# Update Pet
-# -------------------------------------------------------------------
 
 @router.patch("")
 async def update_user_pet(
     pet_data: PetUpdate,
     user_id: str = Depends(get_current_user),
 ):
-    """
-    Update the authenticated user's Pally.
-    """
-
     pet = await update_pet(
         user_id=user_id,
         name=pet_data.name,
@@ -129,6 +89,7 @@ async def update_user_pet(
         humor=pet_data.humor,
         languages=pet_data.languages,
         interests=pet_data.interests,
+        mood=pet_data.mood,
         is_active=pet_data.is_active,
         activity_enabled=pet_data.activity_enabled,
     )
@@ -139,33 +100,13 @@ async def update_user_pet(
             detail="Pally not found",
         )
 
-    return {
-        "id": str(pet["_id"]),
-        "user_id": pet["user_id"],
-        "name": pet["name"],
-        "personality": pet["personality"],
-        "humor": pet["humor"],
-        "languages": pet["languages"],
-        "interests": pet["interests"],
-        "is_active": pet["is_active"],
-        "activity_enabled": pet["activity_enabled"],
-        "created_at": pet["created_at"],
-        "updated_at": pet["updated_at"],
-    }
+    return pet_response(pet)
 
-
-# -------------------------------------------------------------------
-# Delete Pet
-# -------------------------------------------------------------------
 
 @router.delete("")
 async def delete_user_pet(
     user_id: str = Depends(get_current_user),
 ):
-    """
-    Delete the authenticated user's Pally.
-    """
-
     deleted = await delete_pet(user_id)
 
     if not deleted:

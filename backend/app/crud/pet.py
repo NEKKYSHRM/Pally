@@ -7,10 +7,6 @@ from app.models.pet import PetModel
 pets_collection = database[PetModel.collection_name]
 
 
-# -------------------------------------------------------------------
-# Get Pet
-# -------------------------------------------------------------------
-
 async def get_pet_by_user_id(
     user_id: str,
 ) -> dict | None:
@@ -19,10 +15,6 @@ async def get_pet_by_user_id(
     )
 
 
-# -------------------------------------------------------------------
-# Create Pet
-# -------------------------------------------------------------------
-
 async def create_pet(
     user_id: str,
     name: str,
@@ -30,6 +22,7 @@ async def create_pet(
     humor: list[str],
     languages: list[str],
     interests: list[str],
+    mood: str,
 ) -> dict:
     now = datetime.now(timezone.utc)
 
@@ -40,6 +33,7 @@ async def create_pet(
         humor=humor,
         languages=languages,
         interests=interests,
+        mood=mood,
         is_active=True,
         activity_enabled=True,
         created_at=now,
@@ -55,10 +49,6 @@ async def create_pet(
     )
 
 
-# -------------------------------------------------------------------
-# Update Pet
-# -------------------------------------------------------------------
-
 async def update_pet(
     user_id: str,
     name: str | None = None,
@@ -66,10 +56,10 @@ async def update_pet(
     humor: list[str] | None = None,
     languages: list[str] | None = None,
     interests: list[str] | None = None,
+    mood: str | None = None,
     is_active: bool | None = None,
     activity_enabled: bool | None = None,
 ) -> dict | None:
-
     update_data = {
         "updated_at": datetime.now(timezone.utc)
     }
@@ -89,6 +79,9 @@ async def update_pet(
     if interests is not None:
         update_data["interests"] = interests
 
+    if mood is not None:
+        update_data["mood"] = mood
+
     if is_active is not None:
         update_data["is_active"] = is_active
 
@@ -102,14 +95,9 @@ async def update_pet(
     )
 
 
-# -------------------------------------------------------------------
-# Delete Pet
-# -------------------------------------------------------------------
-
 async def delete_pet(
     user_id: str,
 ) -> bool:
-
     result = await pets_collection.delete_one(
         {"user_id": user_id}
     )

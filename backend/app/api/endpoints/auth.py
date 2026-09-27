@@ -28,8 +28,6 @@ from app.crud.user import (
     create_user,
     get_user_by_google_id,
     get_user_by_id,
-)
-from app.crud.refresh_token import (
     create_refresh_token as save_refresh_token,
     get_refresh_token,
     revoke_refresh_token,
@@ -43,6 +41,7 @@ router = APIRouter(
 
 
 bearer_scheme = HTTPBearer()
+
 
 def generate_username() -> str:
     return "".join(
@@ -102,7 +101,7 @@ async def google_callback(code: str):
     After successful authentication:
     - Create/find the Pally user.
     - Create Pally access and refresh tokens.
-    - Store the hashed refresh token in MongoDB.
+    - Store the hashed refresh token inside the user document.
     - Store the actual refresh token in an HttpOnly cookie.
     - Redirect the user to the Next.js /chats page.
     """
@@ -233,7 +232,7 @@ async def google_callback(code: str):
     )
 
     # ---------------------------------------------------------------
-    # Store HASH of refresh token in MongoDB
+    # Store HASH of refresh token inside user document
     # ---------------------------------------------------------------
 
     refresh_token_hash = hashlib.sha256(
@@ -247,16 +246,22 @@ async def google_callback(code: str):
         )
     )
 
-    await save_refresh_token(
+    saved_token = await save_refresh_token(
         user_id=user_id,
         token_hash=refresh_token_hash,
         expires_at=refresh_expiry,
     )
 
+    if not saved_token:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create refresh session",
+        )
+
     # ---------------------------------------------------------------
     # Redirect to Next.js
     # ---------------------------------------------------------------
-    #
+
     # IMPORTANT:
     # We do NOT put access_token or refresh_token
     # into the URL.
@@ -369,6 +374,18 @@ async def refresh_access_token(
         )
 
     # ---------------------------------------------------------------
+    # IMPORTANT:
+    # Make sure the token belongs to the same user
+    # identified by the JWT.
+    # ---------------------------------------------------------------
+
+    if stored_token.get("user_id") != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        )
+
+    # ---------------------------------------------------------------
     # Rotate refresh token
     # ---------------------------------------------------------------
 
@@ -399,11 +416,17 @@ async def refresh_access_token(
         )
     )
 
-    await save_refresh_token(
+    saved_token = await save_refresh_token(
         user_id=user_id,
         token_hash=new_refresh_token_hash,
         expires_at=new_refresh_expiry,
     )
+
+    if not saved_token:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to rotate refresh session",
+        )
 
     # ---------------------------------------------------------------
     # Replace HttpOnly refresh-token cookie
@@ -502,6 +525,10 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired access token",
         )
+
+    # ---------------------------------------------------------------
+    # Verify token type
+    # ---------------------------------------------------------------
 
     if payload.get("type") != "access":
         raise HTTPException(

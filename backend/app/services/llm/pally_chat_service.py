@@ -1,6 +1,8 @@
 from app.crud.conversation import get_conversation_by_id
 from app.crud.message import get_recent_pally_messages
 from app.crud.pet import get_pet_by_user_id
+
+from app.services.llm.context.manager import pally_context_manager
 from app.services.llm.gemini_service import gemini_service
 from app.services.llm.pally_prompt import (
     build_pally_messages,
@@ -18,6 +20,7 @@ class PallyChatService:
     - On a new conversation, the current user's Pally speaks first.
     - After a Pally message exists, the OTHER Pally speaks next.
     - Only Pally-generated messages are used as LLM context.
+    - PallyContextManager provides the complete AI context.
     """
 
     CONTEXT_MESSAGE_LIMIT = 15
@@ -27,15 +30,19 @@ class PallyChatService:
         user_id: str,
         conversation_id: str,
     ) -> dict[str, str] | None:
+
         print(
             "[PALLY SERVICE] ======================================="
         )
+
         print(
             "[PALLY SERVICE] generate_response() started"
         )
+
         print(
             f"[PALLY SERVICE] user_id={user_id}"
         )
+
         print(
             f"[PALLY SERVICE] conversation_id={conversation_id}"
         )
@@ -155,6 +162,7 @@ class PallyChatService:
         # -----------------------------------------------------------
 
         if not previous_messages:
+
             # New conversation.
             #
             # The user who initiated the Pally interaction
@@ -162,7 +170,6 @@ class PallyChatService:
 
             responding_pet = current_user_pet
             responding_pet_id = current_user_pet_id
-            other_pet = other_user_pet
 
             print(
                 "[PALLY SERVICE] No previous Pally messages."
@@ -174,6 +181,7 @@ class PallyChatService:
             )
 
         else:
+
             last_message = previous_messages[-1]
 
             last_pet_id = str(
@@ -185,24 +193,27 @@ class PallyChatService:
                 f"{last_pet_id}"
             )
 
-            # The next speaker must always be the OTHER Pally.
+            # The next speaker must always be
+            # the OTHER Pally.
 
             if last_pet_id == current_user_pet_id:
+
                 responding_pet = other_user_pet
                 responding_pet_id = other_user_pet_id
-                other_pet = current_user_pet
 
             elif last_pet_id == other_user_pet_id:
+
                 responding_pet = current_user_pet
                 responding_pet_id = current_user_pet_id
-                other_pet = other_user_pet
 
             else:
+
                 print(
                     "[PALLY SERVICE] STOP: "
                     "last Pally message belongs to "
                     "an unknown Pally"
                 )
+
                 return None
 
             print(
@@ -211,12 +222,58 @@ class PallyChatService:
             )
 
         # -----------------------------------------------------------
+        # Build complete Pally context
+        # -----------------------------------------------------------
+
+        try:
+            responding_user_id = (
+                user_id
+                if responding_pet_id == current_user_pet_id
+                else other_user_id
+            )
+
+            pally_context = await pally_context_manager.build(
+                conversation_id=conversation_id,
+                current_user_id=responding_user_id,
+                responding_pet_id=responding_pet_id,
+            )
+        except ValueError as exc:
+            print(
+                "[PALLY SERVICE] STOP: "
+                f"context build failed: {exc}"
+            )
+            return None
+
+        print(
+            "[PALLY SERVICE] Pally context built"
+        )
+
+        print(
+            "[PALLY SERVICE] Relationship: "
+            f"{pally_context.relationship.relationship}"
+        )
+
+        print(
+            "[PALLY SERVICE] Tone: "
+            f"{pally_context.relationship.tone}"
+        )
+
+        print(
+            "[PALLY SERVICE] Humor level: "
+            f"{pally_context.relationship.humor_level}"
+        )
+
+        print(
+            "[PALLY SERVICE] Language: "
+            f"{pally_context.relationship.language}"
+        )
+
+        # -----------------------------------------------------------
         # Build system prompt
         # -----------------------------------------------------------
 
         system_prompt = build_pally_system_prompt(
-            pet=responding_pet,
-            other_pet=other_pet,
+            context=pally_context,
         )
 
         print(
@@ -238,6 +295,7 @@ class PallyChatService:
         )
 
         if messages:
+
             print(
                 "[PALLY SERVICE] Gemini final role: "
                 f"{messages[-1]['role']}"
@@ -257,9 +315,11 @@ class PallyChatService:
         )
 
         if not response:
+
             print(
                 "[PALLY SERVICE] Gemini returned empty response"
             )
+
             return None
 
         response = response.strip()

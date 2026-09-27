@@ -2,6 +2,7 @@ import type {
   Connection,
   ConnectionCreate,
   ConnectionStatusUpdate,
+  RelationshipPreferenceUpdate,
 } from "@/app/types/connection";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -133,6 +134,24 @@ export async function updateConnectionStatus(
     {
       method: "PATCH",
       body: JSON.stringify(statusData),
+    }
+  );
+}
+
+
+// ---------------------------------------------------------------
+// Update Relationship Preferences
+// ---------------------------------------------------------------
+
+export async function updateRelationshipPreferences(
+  connectionId: string,
+  preferences: RelationshipPreferenceUpdate
+): Promise<Connection> {
+  return connectionRequest<Connection>(
+    `/connections/${connectionId}/preferences`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(preferences),
     }
   );
 }
