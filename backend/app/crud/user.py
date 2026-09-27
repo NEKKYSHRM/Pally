@@ -155,11 +155,6 @@ async def create_refresh_token(
     token_hash: str,
     expires_at: datetime,
 ) -> dict | None:
-    """
-    Store a new refresh-token session
-    inside the user's document.
-    """
-
     refresh_token = {
         "id": str(uuid4()),
         "token_hash": token_hash,
@@ -180,6 +175,13 @@ async def create_refresh_token(
         },
     )
 
+    print(
+        "[REFRESH CREATE]",
+        "user_id=", user_id,
+        "matched=", result.matched_count,
+        "modified=", result.modified_count,
+    )
+
     if result.modified_count == 0:
         return None
 
@@ -189,7 +191,6 @@ async def create_refresh_token(
 # -------------------------------------------------------------------
 # Get Refresh Token
 # -------------------------------------------------------------------
-
 async def get_refresh_token(token_hash: str):
     now = datetime.now(timezone.utc)
 
@@ -203,6 +204,11 @@ async def get_refresh_token(token_hash: str):
                 }
             }
         }
+    )
+
+    print(
+        "[REFRESH GET]",
+        "found=", bool(user),
     )
 
     if not user:
@@ -220,19 +226,25 @@ async def get_refresh_token(token_hash: str):
         if not expires_at:
             continue
 
-        # MongoDB/PyMongo may return datetimes without tzinfo.
-        # Normalize them to UTC before comparing.
         if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
+            expires_at = expires_at.replace(
+                tzinfo=timezone.utc
+            )
 
         if expires_at <= now:
             continue
+
+        print(
+            "[REFRESH GET] Active refresh token found",
+            "user_id=", str(user["_id"]),
+        )
 
         return {
             **refresh_token,
             "user_id": str(user["_id"]),
         }
 
+    print("[REFRESH GET] Token did not pass validation")
     return None
 
 

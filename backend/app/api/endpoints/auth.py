@@ -281,8 +281,8 @@ async def google_callback(code: str):
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=False,  # True in production with HTTPS
-        samesite="lax",
+        secure=True,
+        samesite="none",
         max_age=(
             settings.REFRESH_TOKEN_EXPIRE_DAYS
             * 24
@@ -436,8 +436,8 @@ async def refresh_access_token(
         key="refresh_token",
         value=new_refresh_token,
         httponly=True,
-        secure=False,  # True in production with HTTPS
-        samesite="lax",
+        secure=True,
+        samesite="none",
         max_age=(
             settings.REFRESH_TOKEN_EXPIRE_DAYS
             * 24
